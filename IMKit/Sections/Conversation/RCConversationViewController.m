@@ -199,7 +199,9 @@ static NSString *const rcMessageBaseCellIndentifier = @"rcMessageBaseCellIndenti
     [self updateDraftBeforeViewAppear];
     [self setNavigationItem];
     
-
+    // 设置初始标题
+    [self setupInitialTitle];
+    
     [self registerSectionHeaderView];
     if (!RCKitConfigCenter.message.enableDestructMessage) {
         [self.chatSessionInputBarControl.pluginBoardView removeItemWithTag:PLUGIN_BOARD_ITEM_DESTRUCT_TAG];
@@ -215,6 +217,74 @@ static NSString *const rcMessageBaseCellIndentifier = @"rcMessageBaseCellIndenti
     }
     if (self.disableSystemEmoji) {
         [self disableSystemDefaultEmoji];
+    }
+}
+
+// 添加设置初始标题的方法
+- (void)setupInitialTitle {
+    if (self.conversationType == ConversationType_PRIVATE) {
+        // 私聊会话，尝试从用户信息提供者获取用户信息
+        if ([RCIM sharedRCIM].userInfoDataSource &&
+            [[RCIM sharedRCIM].userInfoDataSource respondsToSelector:@selector(getUserInfoWithUserId:completion:)]) {
+            [[RCIM sharedRCIM].userInfoDataSource getUserInfoWithUserId:self.targetId completion:^(RCUserInfo *userInfo) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if (userInfo) {
+                        self.navigationItem.title = [RCKitUtility getDisplayName:userInfo];
+                        self.navigationTitle = self.navigationItem.title;
+                    }
+                });
+            }];
+        } else {
+            // 如果没有设置用户信息提供者，尝试从缓存中获取
+            RCUserInfo *userInfo = [[RCIM sharedRCIM] getUserInfoCache:self.targetId];
+            if (userInfo) {
+                self.navigationItem.title = [RCKitUtility getDisplayName:userInfo];
+                self.navigationTitle = self.navigationItem.title;
+            }
+        }
+    } else if (self.conversationType == ConversationType_GROUP) {
+        // 群聊会话，尝试从群组信息提供者获取群组信息
+        if ([RCIM sharedRCIM].groupInfoDataSource &&
+            [[RCIM sharedRCIM].groupInfoDataSource respondsToSelector:@selector(getGroupInfoWithGroupId:completion:)]) {
+            [[RCIM sharedRCIM].groupInfoDataSource getGroupInfoWithGroupId:self.targetId completion:^(RCGroup *groupInfo) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if (groupInfo) {
+                        self.navigationItem.title = groupInfo.groupName;
+                        self.navigationTitle = self.navigationItem.title;
+                    }
+                });
+            }];
+        } else {
+            // 如果没有设置群组信息提供者，尝试从缓存中获取
+            RCGroup *groupInfo = [[RCIM sharedRCIM] getGroupInfoCache:self.targetId];
+            if (groupInfo) {
+                self.navigationItem.title = groupInfo.groupName;
+                self.navigationTitle = self.navigationItem.title;
+            }
+        }
+    } else if (self.conversationType == ConversationType_CHATROOM) {
+        self.navigationItem.title = RCLocalizedString(@"ChatRoom");
+        self.navigationTitle = self.navigationItem.title;
+    } else if (self.conversationType == ConversationType_CUSTOMERSERVICE) {
+        self.navigationItem.title = RCLocalizedString(@"CustomerService");
+        self.navigationTitle = self.navigationItem.title;
+    } else if (self.conversationType == ConversationType_SYSTEM) {
+        self.navigationItem.title = RCLocalizedString(@"SystemMessage");
+        self.navigationTitle = self.navigationItem.title;
+    } else if (self.conversationType == ConversationType_APPSERVICE ||
+               self.conversationType == ConversationType_PUBLICSERVICE) {
+        // 公众号会话，尝试从公众号信息提供者获取信息
+        if ([RCIM sharedRCIM].publicServiceInfoDataSource &&
+            [[RCIM sharedRCIM].publicServiceInfoDataSource respondsToSelector:@selector(getPublicServiceProfile:completion:)]) {
+            [[RCIM sharedRCIM].publicServiceInfoDataSource getPublicServiceProfile:self.targetId completion:^(RCPublicServiceProfile *profile) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if (profile) {
+                        self.navigationItem.title = profile.name;
+                        self.navigationTitle = self.navigationItem.title;
+                    }
+                });
+            }];
+        }
     }
 }
 
@@ -239,6 +309,7 @@ static NSString *const rcMessageBaseCellIndentifier = @"rcMessageBaseCellIndenti
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    [self.navigationController setNavigationBarHidden:NO animated:animated];
     //系统会话，没有输入框,无法根据输入框回调滚动，查看消息没有滚动到最底部
     if (!self.chatSessionInputBarControl && [self.dataSource isAtTheBottomOfTableView] && self.locatedMessageSentTime == 0) {
         [self.conversationMessageCollectionView performBatchUpdates:^{
@@ -279,6 +350,10 @@ static NSString *const rcMessageBaseCellIndentifier = @"rcMessageBaseCellIndenti
 
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
+    UIViewController *topViewController = self.navigationController.visibleViewController;
+    if (![NSStringFromClass([topViewController class]) hasPrefix:@"RC"]) {
+        [self.navigationController setNavigationBarHidden:YES animated:animated];
+    }
     [self.util syncReadStatus];
     
     [self.conversationMessageCollectionView removeGestureRecognizer:self.resetBottomTapGesture];

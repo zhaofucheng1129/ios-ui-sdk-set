@@ -49,6 +49,19 @@ typedef void (^CompleteBlock)(NSArray *conversationList);
         [[RCCoreClient sharedCoreClient] getConversationList:@[ @(ConversationType_PRIVATE), @(ConversationType_GROUP) ]];
 }
 
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    [self.navigationController setNavigationBarHidden:NO animated:animated];
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    UIViewController *topViewController = self.navigationController.visibleViewController;
+    if (![NSStringFromClass([topViewController class]) hasPrefix:@"RC"]) {
+        [self.navigationController setNavigationBarHidden:YES animated:animated];
+    }
+}
+
 #pragma mark - UITableViewDataSource
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     if (!self.listingConversationArray) {

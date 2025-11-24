@@ -94,7 +94,8 @@
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-
+    [self.navigationController setNavigationBarHidden:NO animated:animated];
+    
     [self updateNetworkIndicatorView];
     [self refreshConversationTableViewIfNeeded];
     self.dataSource.isConverstaionListAppear = YES;
@@ -108,7 +109,12 @@
 
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
-
+    // 判断当前导航栈最上面的vc如果是RC开头就设置为不隐藏导航栏，如果不是RC开头就隐藏导航栏
+    UIViewController *topViewController = self.navigationController.visibleViewController;
+    if (![NSStringFromClass([topViewController class]) hasPrefix:@"RC"]) {
+        [self.navigationController setNavigationBarHidden:YES animated:animated];
+    }
+    
     self.dataSource.isConverstaionListAppear = NO;
     [self hideConnectingView];
     [self.conversationListTableView setEditing:NO];
