@@ -231,6 +231,7 @@ static NSString *const rcMessageBaseCellIndentifier = @"rcMessageBaseCellIndenti
                     if (userInfo) {
                         self.navigationItem.title = [RCKitUtility getDisplayName:userInfo];
                         self.navigationTitle = self.navigationItem.title;
+                        [[RCIM sharedRCIM] refreshUserInfoCache:userInfo withUserId:userInfo.userId];
                     }
                 });
             }];
