@@ -77,20 +77,51 @@
 #pragma mark - Deinit
 
 - (void)dealloc {
-    [RCSightExtensionModule sharedInstance].isSightPlayerHolding = NO;
-    if (self.isAddStatusObserver) {
-        [self.playerItem removeObserver:self forKeyPath:STATUS_KEYPATH];
+    // 先停止播放器
+    if (_player) {
+        [_player pause];
+        _player.rate = 0.0f;
     }
-    [self.player removeObserver:self forKeyPath:RATE_KEYPATH];
-    [[NSNotificationCenter defaultCenter] removeObserver:self];
-    if (_itemEndObserver) {
-        [[NSNotificationCenter defaultCenter] removeObserver:_itemEndObserver
-                                                        name:AVPlayerItemDidPlayToEndTimeNotification
-                                                      object:_playerItem];
-    }
+    
+    // 移除观察者之前先停止时间观察器
     if (_timeObserver && _player) {
         [_player removeTimeObserver:_timeObserver];
+        _timeObserver = nil;
     }
+    
+    // 移除结束观察者
+    if (_itemEndObserver) {
+        [[NSNotificationCenter defaultCenter] removeObserver:_itemEndObserver];
+        _itemEndObserver = nil;
+    }
+    
+    // 移除其他观察者
+    if (_playerItem && _isAddStatusObserver) {
+        @try {
+            [_playerItem removeObserver:self forKeyPath:STATUS_KEYPATH];
+        } @catch (NSException *exception) {
+            // 忽略异常
+        }
+        _isAddStatusObserver = NO;
+    }
+    
+    if (_player) {
+        @try {
+            [_player removeObserver:self forKeyPath:RATE_KEYPATH];
+        } @catch (NSException *exception) {
+            // 忽略异常
+        }
+    }
+    
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    
+    // 清理会话
+    if (_session) {
+        [_session invalidateAndCancel];
+        _session = nil;
+    }
+    
+    [RCSightExtensionModule sharedInstance].isSightPlayerHolding = NO;
 }
 
 #pragma mark - Api
@@ -170,14 +201,23 @@
     self.canceling = YES;
     [self.transport.centerPlayBtn setImage:RCResourceImage(@"play_btn_normal") forState:UIControlStateNormal];
     [self.errorTipsLabel removeFromSuperview];
+    
+    // 停止播放器
+    if (_player) {
+        [_player pause];
+        _player.rate = 0.0f;
+    }
+    
     if (!self.isPlaying) {
         return;
     }
+    
     [self.player seekToTime:kCMTimeZero toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero];
     self.player.rate = 0;
     self.isPlaying = NO;
     [self.transport setControlBarHidden:YES];
     [self.transport playbackComplete];
+    
     if (inactivateAudioSession) {
         [self setAudioSessionUnActive];
     }
@@ -204,10 +244,18 @@
 }
 
 - (void)setAudioSessionUnActive {
-    [[AVAudioSession sharedInstance] setActive:NO
-                                   withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
-                                         error:nil];
+    // 添加延迟以确保音频I/O已完成
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        NSError *error = nil;
+        BOOL success = [[AVAudioSession sharedInstance] setActive:NO 
+                                                     withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation 
+                                                           error:&error];
+        if (!success && error) {
+            NSLog(@"Failed to deactivate audio session: %@", error.localizedDescription);
+        }
+    });
 }
+
 #pragma mark - Properties
 
 - (UILabel *)errorTipsLabel {
