@@ -94,7 +94,9 @@
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    [self.navigationController setNavigationBarHidden:NO animated:animated];
+    if ([self parentViewController] == nil) {
+        [self.navigationController setNavigationBarHidden:NO animated:animated];
+    }
     
     [self updateNetworkIndicatorView];
     [self refreshConversationTableViewIfNeeded];
